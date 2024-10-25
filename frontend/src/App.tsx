@@ -1,26 +1,22 @@
 import React from 'react';
-import logo from './logo.svg';
 import './App.css';
+import BMRPage from "./pages/BMR";
+import { Layout, Typography  } from 'antd';
+const { Header, Content } = Layout;
+const { Title } = Typography;
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
-}
+const App: React.FC = () => {
+  
+    return (
+      <Layout>
+        <Header style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'white' }}>
+            <Title style={{marginTop: '5px'}}>房屋购买DEMO</Title>
+        </Header>
+        <Content style={{ padding: '0 48px', background: 'white' }}>
+            <BMRPage/>
+        </Content>
+      </Layout>
+    );
+  };
 
 export default App;
