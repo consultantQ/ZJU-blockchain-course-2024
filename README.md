@@ -428,53 +428,53 @@
 
 - 连接账号，输入密码，登录 MetaMask。
 
-![connect](image\connect.jpg)
+![connect](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/connect.jpg?raw=true)
 
 - 领取初始房屋，然后 MetaMaster 弹出交易请求，之后涉及到改变链的操作时（send），均会弹出该交易请求，所以在之后中不再进行截图。
 
-  ![init](image\getInit.jpg)
+  ![init](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/getInit.jpg?raw=true)
 
 - 可以看到，我的房产中已经出现领取的房屋了，此时还是未上架的状态。
 
-  ![initHouse](image\initHouse.jpg)
+  ![initHouse](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/initHouse.jpg?raw=true)
 
 ### 挂单房产并出售
 
 - 对房屋ID 为 4 的房产，点击上架后，设置出售金额为 20（ETH 为单位）。
 
-  ![list4](image\list4.jpg)
+  ![list4](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/list4.jpg?raw=true)
 
 - 然后点击房产交易，可以看到我们的房产已经挂单出售了。
 
-  ![listHouses](image\listHouses.jpg)
+  ![listHouses](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/listHouses.jpg?raw=true)
 
 ### 查询房产主人与挂单信息
 
 - 我们点击房屋ID 为 3 的房产查看户主信息，可以看到户主的地址与其挂单的所有房产。
 
-  ![queryOwner](image\queryOwner.jpg)
+  ![queryOwner](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/queryOwner.jpg?raw=true)
 
 ### 购买房产
 
 - 我们此时使用的是 Account 2，我们查看所有账户的余额信息，此时我们准备购买房屋ID 为 3 的房产，其属于 Account 2。
 
-  ![ETHbefore](image\ETHbefore.jpg)
+  ![ETHbefore](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/ETHbefore.jpg?raw=true)
 
 - 我们点击购买房屋ID 为 3 的房产，并 确认购买。
 
-  ![buyHouse](image\buyHouse.jpg)
+  ![buyHouse](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/buyHouse.jpg?raw=true)
 
 - 购买完成后，可以发现账户余额发生了变化。由于 Ganache 默认部署合约的用户是 Account 1 ，所以我们的手续费会被转移到 Account 1中，所以 Account 1 的余额增加了一部分。而 Account 5 的余额减少了 15 ETH，Account 2 的余额增加了 15 ETH 减去手续费的部分。
 
-  ![ETHafter](image\ETHafter.jpg)
+  ![ETHafter](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/ETHafter.jpg?raw=true)
 
 - 此时查看我的房产，可以看到房产已经发生了转移。
 
-  ![houseAfter](image\houseAfter.jpg)
+  ![houseAfter](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/houseAfter.jpg?raw=true)
 
 - 私有链如图所示，可见也一同发生了变化。
 
-  ![ganache](image\ganache.jpg)
+  ![ganache](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/ganache.jpg?raw=true)
 
 
 
