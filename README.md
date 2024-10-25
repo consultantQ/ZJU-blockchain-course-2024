@@ -106,7 +106,7 @@
 
 - React
 
-  ```react
+  ```js
   const onGetInitHouse = async () => {
       if(account === '') {
           alert('You have not connected wallet yet.')
@@ -127,11 +127,11 @@
               await BMR_Contract.methods.initUserHouse().send({
                   from: account
               })
-  			// 同时初始化自己的房屋信息
+              // 同时初始化自己的房屋信息
               const hs = await BMR_Contract.methods.getMyHouses().call({
                   from: account
               })
-  			// 更新状态
+              // 更新状态
               updateMyHouses(draft => {
                   draft.length = 0
                   draft.push(...hs)
@@ -176,7 +176,7 @@
 
 - React
 
-  ```react
+  ```js
   const onGetMyHouse = async () => {
       if(account === '') {
           alert('You have not connected wallet yet.')
@@ -237,7 +237,7 @@
 
 - React
 
-  ```react
+  ```js
   const onListHouse = async (tokenId:number, price: number) => {
       if(account === '') {
           alert('You have not connected wallet yet.')
@@ -314,7 +314,7 @@
 
 - React
 
-  ```react
+  ```js
   const onGetTotalListingHouses = async () => {
       if(account === '') {
           alert('You have not connected wallet yet.')
@@ -395,7 +395,7 @@
 
 - React
 
-  ```react
+  ```js
   const onBuyHouse = async (tokenId: number, price: number) => {
       if(account === '') {
           alert('You have not connected wallet yet.')
