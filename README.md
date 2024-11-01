@@ -42,11 +42,12 @@
    
     ```
     {
-      "BMR": your address
+      "BMR": your address，
+      "myERC20": your address
     }
     ```
     
-7. 复制 `./contracts/artifacts/contracts/BuyMyRoom.sol/BuyMyRoom.json` 文件，将其粘贴到 `./frontend/src/utils/abis` 文件夹中。
+7. 复制 `./contracts/artifacts/contracts/BuyMyRoom.sol/BuyMyRoom.json` 文件和  `./contracts/artifacts/contracts/BuyMyRoom.sol/MyERC20.json`，将其粘贴到 `./frontend/src/utils/abis` 文件夹中。
 
 ### 前端
 
@@ -77,6 +78,7 @@
       bool isListed; // 房屋是否挂单销售
       uint256 listedStartTimestamp; // 房屋的挂单开始时间
       uint256 price; // 房屋的价格
+      bool token; // 使用 ETH 还是 ERC20
   }
   
   // 设置 tokenId 与 具体房屋的对应关系
@@ -148,6 +150,53 @@
   }
   ```
 
+### 兑换代币（Bonus）
+
+- 支持用户使用 ETH 兑换 ERC20 代币，目前是 1：1的兑换比例
+
+- Solidity
+
+  ```solidity
+  contract MyERC20 is ERC20 {
+      constructor() ERC20("MyERC20", "ME2") {
+      }
+      // 兑换代币
+      function exchangeERC20() external payable {
+          uint256 amount = msg.value / 1 ether; // 1 token per ETH
+          _mint(msg.sender, amount);
+      }
+  }
+  ```
+
+- React
+
+  ```js
+  const onExchangeERC20 = async (num: number) => {
+      if(account === '') {
+          alert('You have not connected wallet yet.')
+          return
+      }
+      if (myERC20Contract) {
+          try {
+              // 1 ETH 兑换 1 个 ERC20 代币
+              const n = web3.utils.toWei(num.toString(), 'ether') // 1 eth for 1 erc20
+              // 申请兑换
+              await myERC20Contract.methods.exchangeERC20().send({
+                  from: account,
+                  value: n
+              })
+  			// 更新信息
+              updateInfo()
+              alert('You have exchanged the house.')
+          } catch (error: any) {
+              alert(error.message)
+          }
+      } else {
+          alert('Contract not exists.')
+      }
+  }
+  ```
+
 ### 查看自己拥有的房产列表
 
 - 项目支持用户查看自己所拥有的房产列表
@@ -210,7 +259,7 @@
 
   ```solidity
   // 挂单出售房产，输入为房产的 tokenId 和挂单价格（Wei）
-  function listHouse(uint256 tokenId, uint256 price) external returns (House memory) {
+  function listHouse(uint256 tokenId, uint256 price, bool token) external returns (House memory) {
       require(ownerOf(tokenId) == msg.sender, "You are not the owner of this house");
       require(houses[tokenId].owner != address(0), "House does not exist");
       require(price > 0, "Price must be greater than 0");
@@ -218,6 +267,7 @@
       // 设置挂单出售
       houses[tokenId].isListed = true;
       houses[tokenId].price = price;
+      houses[tokenId].token = token;
       houses[tokenId].listedStartTimestamp = block.timestamp;
       emit HouseListed(tokenId, price, msg.sender);
       return houses[tokenId];
@@ -229,6 +279,7 @@
       // 设置取消挂单
       houses[tokenId].isListed = false;
       houses[tokenId].price = 0;
+      houses[tokenId].token = false;
       houses[tokenId].listedStartTimestamp = 0;
       emit HouseUnlisted(tokenId);
       return houses[tokenId];
@@ -245,11 +296,18 @@
       }
       if (BMR_Contract) {
           try {
-              // 将 ETH 单位转化为 Wei
-              const wei_price = web3.utils.toWei(price.toString(), 'ether')
-              await BMR_Contract.methods.listHouse(tokenId, wei_price).send({
-                  from: account
-              })
+              if (token) { // 如果是 ERC20
+                  await BMR_Contract.methods.listHouse(tokenId, price, token).send({
+                      from: account
+                  })
+              } 
+              else{ // 如果是 ETH
+                  // 将 ETH 转化成 Wei
+                  const wei_price = web3.utils.toWei(price.toString(), 'ether')
+                  await BMR_Contract.methods.listHouse(tokenId, wei_price, token).send({
+                      from: account
+                  })
+              }
               // 更新 house 和 listing house 的状态
               updateInfo()
               alert('You have listed the house.')
@@ -361,7 +419,7 @@
 - Solidity
 
   ```solidity
-  // 用户购买房产，tokenId 为购买房产的 Id，用户传递价格到 msg.value 中进行交易
+  // 用户使用 ETH 购买房产，tokenId 为购买房产的 Id，用户传递价格到 msg.value 中进行交易
   function buyHouse(uint256 tokenId) external payable returns (House memory) {
       require(houses[tokenId].isListed, "House is not listed");
       require(houses[tokenId].price > 0 && houses[tokenId].listedStartTimestamp > 0, "House price and listedStartTimestamp need to be bigger than 0");
@@ -391,24 +449,58 @@
       emit HouseBought(tokenId, price / 1 ether, msg.sender);
       return houses[tokenId];
   }
+  // 用户使用 ERC20 购买房产，tokenId 为购买房产的 Id
+  function buyHouseByERC20(uint256 tokenId) external payable returns (House memory) {
+      require(houses[tokenId].isListed, "House is not listed");
+      require(houses[tokenId].price > 0 && houses[tokenId].listedStartTimestamp > 0, "House price and listedStartTimestamp need to be bigger than 0");
+      require(ownerOf(tokenId) != msg.sender, "You are the owner of this house");
+  	
+      address owner = houses[tokenId].owner;
+      uint256 price = houses[tokenId].price;
+      // 检测用户 ERC20 是否满足价格
+      require(myERC20.balanceOf(msg.sender) >= price, "Insufficient ERC20 balance");
+      // 支付 ERC20
+      myERC20.transferFrom(msg.sender, owner, price);
+  	// 房产所有权转移
+      _transfer(owner, msg.sender, tokenId);
+      houses[tokenId].owner = msg.sender;
+      houses[tokenId].isListed = false;
+      houses[tokenId].price = 0;
+      houses[tokenId].token = false;
+      houses[tokenId].listedStartTimestamp = 0;
+      emit HouseBought(tokenId, price, msg.sender);
+      return houses[tokenId];
+  }
   ```
 
 - React
 
   ```js
-  const onBuyHouse = async (tokenId: number, price: number) => {
+  const onBuyHouse = async (tokenId: number, price: number, token: boolean) => {
       if(account === '') {
           alert('You have not connected wallet yet.')
           return
       }
       if (BMR_Contract) {
           try {
-              // 购买房产
-              await BMR_Contract.methods.buyHouse(tokenId).send({
-                  from: account,
-                  value: price
-              })
-              // 更新 houses 和 listing houses 的状态
+              if (token) { // 如果使用 ERC 20 购买
+                  // 对转移的代币数量进行授权
+                  await myERC20Contract.methods.approve(BMR_Contract.options.address, price).send({
+                      from: account
+                  })
+                  // 购买房屋
+                  await BMR_Contract.methods.buyHouseByERC20(tokenId).send({
+                      from: account
+                  })
+              }
+              else{ // 如果使用 ETH 购买
+                  // 购买房屋
+                  await BMR_Contract.methods.buyHouse(tokenId).send({
+                      from: account,
+                      value: price
+                  })
+              }
+              // 更新信息
               updateInfo()
               alert('You have bought the house.')
           } catch (error: any) {
@@ -426,56 +518,66 @@
 
 ### 连接账号与初始化
 
-- 连接账号，输入密码，登录 MetaMask。
+- 连接账号界面，输入密码，登录 MetaMask。
 
-![connect](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/connect.jpg?raw=true)
+![connect](./assets/connect.jpg)
 
-- 领取初始房屋，然后 MetaMaster 弹出交易请求，之后涉及到改变链的操作时（send），均会弹出该交易请求，所以在之后中不再进行截图。
+- 领取初始房屋界面。MetaMaster 会弹出交易请求，之后涉及到改变链的操作时（send），均会弹出该交易请求，所以在之后中不再进行截图。
 
-  ![init](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/getInit.jpg?raw=true)
+  ![init](./assets/init.jpg)
 
-- 可以看到，我的房产中已经出现领取的房屋了，此时还是未上架的状态。
+- 我的房产界面。当领取房屋或购买其他人房屋后，房产便会显示在我的房产界面。此时领取的房屋还是未上架的状态。
 
-  ![initHouse](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/initHouse.jpg?raw=true)
+  ![initHouse](./assets/initHouse.jpg)
 
+### 兑换代币
+
+- 兑换代币界面。输入兑换数量，点击兑换，即可完成兑换。然后可以在“代币”处查看自己的代币数量。
+
+  ![exchange](./assets/exchange.jpg)
 ### 挂单房产并出售
 
-- 对房屋ID 为 4 的房产，点击上架后，设置出售金额为 20（ETH 为单位）。
+- 对房屋ID 为 6 的房产，点击上架后，设置出售金额为 5 ERC20。当然也可以选择 ETH 进行出售。
 
-  ![list4](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/list4.jpg?raw=true)
+  ![listHouse](./assets/listHouse.jpg)
 
-- 然后点击房产交易，可以看到我们的房产已经挂单出售了。
+- 然后点击房产交易，可以看到我们的房产已经挂单出售了。可以在房产处看到房屋ID，房屋价格（ETH 或 ERC20）和挂单时间。
 
-  ![listHouses](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/listHouses.jpg?raw=true)
+  ![listing](./assets/listing.jpg)
 
 ### 查询房产主人与挂单信息
 
-- 我们点击房屋ID 为 3 的房产查看户主信息，可以看到户主的地址与其挂单的所有房产。
+- 我们点击房屋ID 为 4 的房产查看户主信息，可以看到户主的地址与其挂单的所有房产。
 
-  ![queryOwner](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/queryOwner.jpg?raw=true)
+  ![query](./assets/query.jpg)
 
 ### 购买房产
 
-- 我们此时使用的是 Account 2，我们查看所有账户的余额信息，此时我们准备购买房屋ID 为 3 的房产，其属于 Account 2。
+- 我们此时使用的是 Account 6，我们查看钱包或者 ganache，来查看所有账户的余额信息，此时我们准备购买房屋ID 为 4 的房产，其属于 Account 3。
 
-  ![ETHbefore](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/ETHbefore.jpg?raw=true)
+  ![buyBefore](./assets/buyBefore.jpg)
 
-- 我们点击购买房屋ID 为 3 的房产，并 确认购买。
+- 我们点击购买房屋ID 为 4 的房产，并确认购买。
 
-  ![buyHouse](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/buyHouse.jpg?raw=true)
+  ![buy4](./assets/buy4.jpg)
 
-- 购买完成后，可以发现账户余额发生了变化。由于 Ganache 默认部署合约的用户是 Account 1 ，所以我们的手续费会被转移到 Account 1中，所以 Account 1 的余额增加了一部分。而 Account 5 的余额减少了 15 ETH，Account 2 的余额增加了 15 ETH 减去手续费的部分。
+- 购买完成后，可以发现账户余额发生了变化。由于 Ganache 默认部署合约的用户是 Account 1 ，所以我们的手续费会被转移到 Account 1中，所以 Account 1 的余额增加了一部分。而 Account 6 的余额减少了 15 ETH，Account 3 的余额增加了 15 ETH 减去手续费的部分。
 
-  ![ETHafter](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/ETHafter.jpg?raw=true)
+  ![buyAfter](./assets/buyAfter.jpg)
 
 - 此时查看我的房产，可以看到房产已经发生了转移。
 
-  ![houseAfter](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/houseAfter.jpg?raw=true)
+  ![houseAfter](./assets/houseAfter.jpg)
 
-- 私有链如图所示，可见也一同发生了变化。
+- 钱包如图所示，可见也一同发生了变化。
 
-  ![ganache](https://github.com/consultantQ/ZJU-blockchain-course-2024/blob/main/image/ganache.jpg?raw=true)
+  ![wallet](./assets/wallet.jpg)
 
+### 使用代币购买
+
+- 除了 ETH 外，我们也可以通过 ERC20 代币进行购买，此时 ERC20 代币会发生转移。
+    
+  ![buyERC20](./assets/buyERC.jpg)
 
 
 ## 参考内容

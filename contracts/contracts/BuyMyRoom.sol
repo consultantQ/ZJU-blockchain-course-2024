@@ -23,6 +23,7 @@ contract BuyMyRoom is ERC721 {
         bool isListed;
         uint256 listedStartTimestamp;
         uint256 price;
+        bool token;
     }
 
     mapping(uint256 => House) public houses; // A map from house-index to its information
@@ -38,11 +39,12 @@ contract BuyMyRoom is ERC721 {
         _tokenIdCounter = 0;
         platform = msg.sender;
         feeRate = 1; // 1%
+        myERC20 = new MyERC20();
     }
 
     function mint(address to) internal {
         _safeMint(to, _tokenIdCounter);
-        houses[_tokenIdCounter] = House(to, _tokenIdCounter, false, 0, 0);
+        houses[_tokenIdCounter] = House(to, _tokenIdCounter, false, 0, 0, false);
         _tokenIdCounter++;
         console.log("Total houses: %s", _tokenIdCounter);
     }
@@ -55,13 +57,14 @@ contract BuyMyRoom is ERC721 {
         console.log("Initialized user: %s", msg.sender);
     }
 
-    function listHouse(uint256 tokenId, uint256 price) external returns (House memory) {
+    function listHouse(uint256 tokenId, uint256 price, bool token) external returns (House memory) {
         require(ownerOf(tokenId) == msg.sender, "You are not the owner of this house");
         require(houses[tokenId].owner != address(0), "House does not exist");
         require(price > 0, "Price must be greater than 0");
         require(!houses[tokenId].isListed, "House is already listed");
         houses[tokenId].isListed = true;
         houses[tokenId].price = price;
+        houses[tokenId].token = token;
         houses[tokenId].listedStartTimestamp = block.timestamp;
         emit HouseListed(tokenId, price, msg.sender);
         return houses[tokenId];
@@ -72,6 +75,7 @@ contract BuyMyRoom is ERC721 {
         require(houses[tokenId].isListed, "House is not listed");
         houses[tokenId].isListed = false;
         houses[tokenId].price = 0;
+        houses[tokenId].token = false;
         houses[tokenId].listedStartTimestamp = 0;
         emit HouseUnlisted(tokenId);
         return houses[tokenId];
@@ -158,6 +162,34 @@ contract BuyMyRoom is ERC721 {
         houses[tokenId].price = 0;
         houses[tokenId].listedStartTimestamp = 0;
         emit HouseBought(tokenId, price / 1 ether, msg.sender);
+        return houses[tokenId];
+    }
+
+    function buyHouseByERC20(uint256 tokenId) external payable returns (House memory) {
+        require(houses[tokenId].isListed, "House is not listed");
+        require(houses[tokenId].price > 0 && houses[tokenId].listedStartTimestamp > 0, "House price and listedStartTimestamp need to be bigger than 0");
+        require(ownerOf(tokenId) != msg.sender, "You are the owner of this house");
+
+        address owner = houses[tokenId].owner;
+        uint256 price = houses[tokenId].price;
+        
+        require(myERC20.balanceOf(msg.sender) >= price, "Insufficient ERC20 balance");
+        myERC20.transferFrom(msg.sender, owner, price);
+
+        // uint256 listingTimestamp = block.timestamp - houses[tokenId].listedStartTimestamp;
+        // uint256 fee = listingTimestamp / 60 * price * feeRate / 100;
+        // uint256 maxFee = price * feeRate * 20 / 100;
+        // if (fee > maxFee) {
+        //     fee = maxFee;
+        // }
+        // require(myERC20.transferFrom(msg.sender, platform, fee), "ERC20 fee transfer failed");
+        _transfer(owner, msg.sender, tokenId);
+        houses[tokenId].owner = msg.sender;
+        houses[tokenId].isListed = false;
+        houses[tokenId].price = 0;
+        houses[tokenId].token = false;
+        houses[tokenId].listedStartTimestamp = 0;
+        emit HouseBought(tokenId, price, msg.sender);
         return houses[tokenId];
     }
 

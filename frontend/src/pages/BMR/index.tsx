@@ -1,6 +1,6 @@
-import {Button, Card, Input, Modal, Segmented} from 'antd';
+import {Button, Card, Input, Modal, Segmented, Select} from 'antd';
 import {useEffect, useState} from 'react';
-import {BMR_Contract, web3} from "../../utils/contracts";
+import {BMR_Contract, web3, myERC20Contract} from "../../utils/contracts";
 import './index.css';
 import { useImmer } from 'use-immer';
 import { AppstoreOutlined, BarsOutlined} from '@ant-design/icons';
@@ -16,7 +16,8 @@ type houseType = {
     owner: string,
     price: number,
     isListed: boolean,
-    listedStartTimestamp: number
+    listedStartTimestamp: number,
+    token: boolean
 }
 
 const BMRPage = () => {
@@ -24,14 +25,20 @@ const BMRPage = () => {
     const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
     const [isQueryModalOpen, setIsQueryModalOpen] = useState(false);
     const [isListModalOpen, setIsListModalOpen] = useState(false);
+    const [isExchangeModalOpen, setIsExchangeModalOpen] = useState(false);
+
     const [selectedHouse, setSelectedHouse] = useState<houseType>();
     const [inputPrice, setInputPrice] = useState(0);
+    const [exchangeERC20, setExchangeERC20] = useState(0)
 
     const [account, setAccount] = useState('')
     const [isInit, setIsInit] = useState(false)
     const [myHouses, updateMyHouses] = useImmer<any[]>([])
     const [listingHouses, updateListingHouses] = useImmer<any[]>([])
 
+    const [tokenName, setTokenName] = useState("ETH")
+
+    const [numOfERC20, setNumOfERC20] = useState(0)
     useEffect(() => {
         // 初始化检查用户是否已经连接钱包
         // 查看window对象里是否存在ethereum（metamask安装后注入的）对象
@@ -60,6 +67,9 @@ const BMRPage = () => {
                 updateMyHouses(hs)
                 const lhs = await BMR_Contract.methods.getTotalListingHouses().call({ from: account })
                 updateListingHouses(lhs)
+
+                const erc20 = await myERC20Contract.methods.balanceOf(account).call()
+                setNumOfERC20(erc20)
             } else {
                 alert('Contract not exists.')
             }
@@ -103,6 +113,22 @@ const BMRPage = () => {
         }
     }
 
+    const onGetERC20 = async () => {
+        if(account === '') {
+            alert('You have not connected wallet yet.')
+            return
+        }
+        if (myERC20Contract) {
+            try {
+                const erc20 = await myERC20Contract.methods.balanceOf(account).call()
+                setNumOfERC20(erc20)
+            } catch (error: any) {
+                alert(error.message)
+            }
+        } else {
+            alert('Contract not exists.')
+        }
+    }
     const onGetMyHouse = async () => {
         if(account === '') {
             alert('You have not connected wallet yet.')
@@ -150,21 +176,28 @@ const BMRPage = () => {
     const updateInfo = async () => {
         onGetMyHouse()
         onGetTotalListingHouses()
+        onGetERC20()
     }
 
-    const onListHouse = async (tokenId:number, price: number) => {
+    const onListHouse = async (tokenId:number, price: number, token: boolean) => {
         if(account === '') {
             alert('You have not connected wallet yet.')
             return
         }
         if (BMR_Contract) {
             try {
-                // convert ETH to Wei
-                const wei_price = web3.utils.toWei(price.toString(), 'ether')
-                await BMR_Contract.methods.listHouse(tokenId, wei_price).send({
-                    from: account
-                })
-        
+                if (token) {
+                    await BMR_Contract.methods.listHouse(tokenId, price, token).send({
+                        from: account
+                    })
+                }
+                else{
+                    // 将 ETH 转化成 Wei
+                    const wei_price = web3.utils.toWei(price.toString(), 'ether')
+                    await BMR_Contract.methods.listHouse(tokenId, wei_price, token).send({
+                        from: account
+                    })
+                }
                 updateInfo()
                 alert('You have listed the house.')
             } catch (error: any) {
@@ -200,8 +233,8 @@ const BMRPage = () => {
         setIsBuyModalOpen(true);
     };
 
-    const handleBuyOk = (tokenId: number, price: number) => {
-        onBuyHouse(tokenId, price).then(() => {
+    const handleBuyOk = (tokenId: number, price: number, token: boolean) => {
+        onBuyHouse(tokenId, price, token).then(() => {
             setIsBuyModalOpen(false);
         });
     };
@@ -224,12 +257,13 @@ const BMRPage = () => {
         setIsListModalOpen(true);
     };
 
-    const handleListOk = (tokenId: number) => {
+    const handleListOk = (tokenId: number, tokenType: string) => {
         if (inputPrice <= 0) {
             alert('Price should be greater than 0.');
             return;
         }
-        onListHouse(tokenId, inputPrice).then(() => {
+        const token = tokenType === "ERC20";
+        onListHouse(tokenId, inputPrice, token).then(() => {
             setIsListModalOpen(false);
         });
     };
@@ -238,7 +272,50 @@ const BMRPage = () => {
         setIsListModalOpen(false);
     };
 
-    const onBuyHouse = async (tokenId: number, price: number) => {
+    const showExchangeModal = () => {
+        setIsExchangeModalOpen(true);
+    };
+
+    const handleExchangeOk = (num: number) => {
+        if (exchangeERC20 <= 0) {
+            alert('ExchangeERC20 should be greater than 0.');
+            return;
+        }
+        onExchangeERC20(exchangeERC20).then(() => {
+            setIsExchangeModalOpen(false);
+        });
+    };
+
+    const handleExchangeCancel = () => {
+        setIsExchangeModalOpen(false);
+    };
+
+    const onExchangeERC20 = async (num: number) => {
+        if(account === '') {
+            alert('You have not connected wallet yet.')
+            return
+        }
+        
+        if (myERC20Contract) {
+            try {
+                const n = web3.utils.toWei(num.toString(), 'ether') // 1 eth for 1 erc20
+                await myERC20Contract.methods.exchangeERC20().send({
+                    from: account,
+                    value: n
+                })
+
+                updateInfo()
+
+                alert('You have exchanged the house.')
+            } catch (error: any) {
+                alert(error.message)
+            }
+        } else {
+            alert('Contract not exists.')
+        }
+    }
+
+    const onBuyHouse = async (tokenId: number, price: number, token: boolean) => {
         if(account === '') {
             alert('You have not connected wallet yet.')
             return
@@ -246,10 +323,20 @@ const BMRPage = () => {
         
         if (BMR_Contract) {
             try {
-                await BMR_Contract.methods.buyHouse(tokenId).send({
-                    from: account,
-                    value: price
-                })
+                if (token) {
+                    await myERC20Contract.methods.approve(BMR_Contract.options.address, price).send({
+                        from: account
+                    })
+                    await BMR_Contract.methods.buyHouseByERC20(tokenId).send({
+                        from: account
+                    })
+                }
+                else{
+                    await BMR_Contract.methods.buyHouse(tokenId).send({
+                        from: account,
+                        value: price
+                    })
+                }
 
                 updateInfo()
 
@@ -319,7 +406,13 @@ const BMRPage = () => {
                     <div>当前用户拥有房屋数量：{account === '' ? 0 : myHouses.length}</div> */}
                     {account === '' && <Button onClick={onClickConnectWallet}>连接账号</Button>}
                     {isInit === false && <Button onClick={onGetInitHouse}>获得初始房屋</Button>}
-                    
+                    {<Button onClick={showExchangeModal}>兑换代币</Button>}
+                    <Modal title="兑换代币" open={isExchangeModalOpen} onOk={() => handleExchangeOk(exchangeERC20)} onCancel={handleExchangeCancel} okText="确认" cancelText="取消">
+                        <label>请输入兑换多少代币（1 ETH 兑换 1 个代币）：</label>
+                        <Input placeholder="请输入代币数量" onChange={(e) => {
+                            setExchangeERC20(Number(e.target.value))
+                        }} />
+                    </Modal>
                     <Segmented
                         options={[
                         { label: '我的房产', value: 'MyHouses', icon: <BarsOutlined /> },
@@ -329,6 +422,9 @@ const BMRPage = () => {
                         onChange={handleChange}
                     />
                     <br />
+                    { account !== '' && <>代币：{numOfERC20}</>}
+                    <br />
+                    { account !== '' && <>房屋数量：{myHouses.length}</>}
                     <br />
                     {
                         segmentedValue === 'MyHouses' && 
@@ -357,11 +453,34 @@ const BMRPage = () => {
                                         <br />
                                     </div>
                                 })}
-                                <Modal title="确认上架" open={isListModalOpen} onOk={() => selectedHouse && handleListOk(selectedHouse.tokenId)} onCancel={handleListCancel} okText="确认" cancelText="取消">
-                                        <label>请输入价格（ETH）：</label>
-                                        <Input placeholder="请输入价格" onChange={(e) => {
-                                            setInputPrice(Number(e.target.value))
-                                        }} />
+                                <Modal title="确认上架" open={isListModalOpen} onOk={() => selectedHouse && handleListOk(selectedHouse.tokenId, tokenName)} onCancel={handleListCancel} okText="确认" cancelText="取消">
+                                        <Select
+                                            defaultValue="ETH"
+                                            style={{ width: 120 }}
+                                            onChange={(value) => {setTokenName(value)}}
+                                            options={[
+                                                { value: 'ETH', label: 'ETH' },
+                                                { value: 'ERC20', label: 'ERC20' },
+                                            ]}
+                                        />
+                                        {
+                                            tokenName === 'ETH' && 
+                                            <>
+                                                <label>请输入价格（ETH）：</label>
+                                                <Input placeholder="请输入价格" onChange={(e) => {
+                                                    setInputPrice(Number(e.target.value))
+                                                }} />
+                                            </>
+                                        }
+                                        {
+                                            tokenName === 'ERC20' && 
+                                            <>
+                                                <label>请输入价格（MyERC20）：</label>
+                                                <Input placeholder="请输入价格" onChange={(e) => {
+                                                    setInputPrice(Number(e.target.value))
+                                                }} />
+                                            </>
+                                        }
                                 </Modal>
                             </div>
                         </div>
@@ -389,7 +508,7 @@ const BMRPage = () => {
                                             <Meta
                                             title={`房屋ID：${house.tokenId}`}
                                             description={<div>
-                                                房屋价格：{web3.utils.fromWei(house.price.toString(), 'ether')} <br />
+                                                房屋价格：{house.token ? house.price.toString() : web3.utils.fromWei(house.price.toString(), 'ether')} {house.token ? "ERC20" : "ETH"}<br />
                                                 挂单时间：{formattedDate }
                                             </div>}
                                             />
@@ -397,8 +516,8 @@ const BMRPage = () => {
                                         <br />
                                     </div>
                                 })}
-                                <Modal title="确认购买" open={isBuyModalOpen} onOk={() => selectedHouse && handleBuyOk(selectedHouse.tokenId, selectedHouse.price)} onCancel={handleBuyCancel} okText="确认" cancelText="取消">
-                                        <p>你确定花费{selectedHouse && web3.utils.fromWei((selectedHouse.price.toString()), 'ether')} ETH 购买该房产吗？</p>
+                                <Modal title="确认购买" open={isBuyModalOpen} onOk={() => selectedHouse && handleBuyOk(selectedHouse.tokenId, selectedHouse.price, selectedHouse.token)} onCancel={handleBuyCancel} okText="确认" cancelText="取消">
+                                        <p>你确定花费{selectedHouse && (selectedHouse.token ? selectedHouse.price.toString() : web3.utils.fromWei((selectedHouse.price.toString()), 'ether'))} {selectedHouse && selectedHouse.token ? "ERC20" : "ETH"} 购买该房产吗？</p>
                                 </Modal>
                                 <Modal title="查询信息" open={isQueryModalOpen} onOk={handleQueryCancel} onCancel={handleQueryCancel} okText="确认" cancelText="取消">
                                     <p>户主：{selectedHouse?.owner}</p>
