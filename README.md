@@ -185,7 +185,7 @@
                   from: account,
                   value: n
               })
-  			// 更新信息
+  			// 更新代币信息
               updateInfo()
               alert('You have exchanged the house.')
           } catch (error: any) {
@@ -258,7 +258,7 @@
 - Solidity
 
   ```solidity
-  // 挂单出售房产，输入为房产的 tokenId 和挂单价格（Wei）
+  // 挂单出售房产，输入为房产的 tokenId, 挂单价格（ERC20 or ETH）, 是否使用 ERC20
   function listHouse(uint256 tokenId, uint256 price, bool token) external returns (House memory) {
       require(ownerOf(tokenId) == msg.sender, "You are not the owner of this house");
       require(houses[tokenId].owner != address(0), "House does not exist");
@@ -329,7 +329,7 @@
               await BMR_Contract.methods.unListHouse(tokenId).send({
                   from: account
               })
-       		// 更新 houses 和 listing houses 的状态
+       		  // 更新 houses 和 listing houses 的状态
               updateInfo()
               alert('You have unlisted the house.')
           } catch (error: any) {
